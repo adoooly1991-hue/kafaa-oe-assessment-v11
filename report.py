@@ -17,7 +17,7 @@ def t_i18n(key, lang, i18n):
 def _brand_header(slide, brand_primary="#C00000", logo_path=None):
     try:
         band = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), Inches(10), Inches(0.18))
-        band.fill.solid(); 
+        band.fill.solid()
         h = brand_primary.lstrip('#')
         band.fill.fore_color.rgb = RGBColor(int(h[0:2],16), int(h[2:4],16), int(h[4:6],16))
         band.line.fill.background()
@@ -25,6 +25,24 @@ def _brand_header(slide, brand_primary="#C00000", logo_path=None):
             slide.shapes.add_picture(logo_path, Inches(8.2), Inches(0.2), height=Inches(0.6))
     except Exception:
         pass
+
+def _load_brand_master_fallback(template_path):
+    """If template_path is None, try to read templates.yaml → brand.pptx_master; else fallback to default Presentation()."""
+    master_to_use = template_path
+    try:
+        import yaml
+        if master_to_use is None and os.path.exists('templates.yaml'):
+            with open('templates.yaml','r', encoding='utf-8') as f:
+                tpl = yaml.safe_load(f) or {}
+                master_to_use = (tpl.get('brand',{}) or {}).get('pptx_master')
+    except Exception:
+        master_to_use = template_path
+    try:
+        if master_to_use and os.path.exists(master_to_use):
+            return Presentation(master_to_use)
+        return Presentation()
+    except Exception:
+        return Presentation()
 
 def add_material_flow_narrative_slide(prs, text: str, lang='en', i18n=None, brand_primary="#C00000", logo_path=None):
     slide = prs.slides.add_slide(prs.slide_layouts[5])
@@ -38,25 +56,16 @@ def add_material_flow_narrative_slide(prs, text: str, lang='en', i18n=None, bran
     tf.paragraphs[0].font.size = Pt(12)
 
 def export_observations_pptx(observations_df, out_path, steps=None, perstep_top2=None, spacing_mode="Effective CT", ct_eff_map=None, vc_summary=None, material_flow_text=None, photos=None, template_path=None, lang='en', i18n=None, brand_primary="#C00000", logo_path=None):
-    default_master = None
-    try:
-        # Try to load brand pptx master from templates.yaml via env hint
-        import yaml
-        if os.path.exists('templates.yaml'):
-            with open('templates.yaml','r', encoding='utf-8') as _f:
-                _tpl = yaml.safe_load(_f) or {}
-                default_master = (_tpl.get('brand',{}) or {}).get('pptx_master')
-    except Exception:
-        default_master = None
-    master_to_use = template_path or default_master
-    prs = Presentation(master_to_use) if (master_to_use and os.path.exists(master_to_use)) else Presentation()
+    prs = _load_brand_master_fallback(template_path)
     title = prs.slides.add_slide(prs.slide_layouts[0])
     _brand_header(title, brand_primary, logo_path)
     if title.shapes.title:
         title.shapes.title.text = t_i18n("title", lang, i18n or {})
     if hasattr(title, "placeholders") and len(title.placeholders)>1:
-        try: title.placeholders[1].text = ""
-        except Exception: pass
+        try:
+            title.placeholders[1].text = ""
+        except Exception:
+            pass
 
     if steps and perstep_top2:
         add_current_state_map_slide(prs, steps, perstep_top2, spacing_mode=spacing_mode, ct_eff_map=ct_eff_map or {}, lang=lang, i18n=i18n, brand_primary=brand_primary, logo_path=logo_path)
@@ -92,7 +101,7 @@ def export_observations_pptx(observations_df, out_path, steps=None, perstep_top2
         body = s.shapes.add_textbox(Inches(0.5), Inches(2.0), Inches(6.5), Inches(3))
         body.text_frame.text = row['observation']
         body.text_frame.paragraphs[0].font.size = Pt(18)
-        # Photos
+        # Photos (up to 2) on right
         try:
             if photos:
                 key = (str(row.get('step_id','')), str(row.get('waste','')).lower())
@@ -201,22 +210,26 @@ def add_value_chain_slide(prs, vc_summary, lang='en', i18n=None, brand_primary="
 def export_observations_pdf(observations_df, out_path, brand_primary="#C00000", logo_path="assets/kafaa_logo.png"):
     c = canvas.Canvas(out_path, pagesize=landscape(A4))
     w, h = landscape(A4)
-    # Watermark on each page
+
+    # Watermark function
     def _watermark():
         try:
             from reportlab.lib.utils import ImageReader
             c.saveState()
-            c.translate(w*0.5, h*0.35)
+            c.translate(w * 0.5, h * 0.35)
             c.rotate(25)
-            c.setFillAlpha(0.08)
+            try:
+                c.setFillAlpha(0.08)  # available in reportlab 4.x
+            except Exception:
+                pass
             img = ImageReader(logo_path) if (logo_path and os.path.exists(logo_path)) else None
             if img:
-                c.drawImage(img, -w*0.25, -h*0.15, width=w*0.5, height=h*0.3, mask='auto', preserveAspectRatio=True)
+                c.drawImage(img, -w*0.25, -h*0.15, width=w*0.5, height=h*0.3, preserveAspectRatio=True, mask='auto')
             c.restoreState()
         except Exception:
             pass
+
     _watermark()
-    w, h = landscape(A4)
     c.setFont("Helvetica-Bold", 20); c.drawString(2*cm, h-1.5*cm, "Automated VSM – Observations")
     c.setFont("Helvetica-Bold", 12); y = h-3.0*cm
     for _, row in observations_df.iterrows():
@@ -224,15 +237,20 @@ def export_observations_pdf(observations_df, out_path, brand_primary="#C00000", 
         y -= 0.7*cm; c.setFont("Helvetica", 11)
         for line in split_text(row['observation'], max_chars=140):
             c.drawString(2.0*cm, y, line); y -= 0.55*cm
-            if y < 2.0*cm: c.showPage(); y = h-2.0*cm; c.setFont("Helvetica", 11)
+            if y < 2.0*cm:
+                c.showPage(); _watermark(); y = h-2.0*cm; c.setFont("Helvetica", 11)
         c.setFont("Helvetica-Bold", 12); y -= 0.3*cm
-        if y < 3.0*cm: c.showPage(); y = h-3.0*cm; c.setFont("Helvetica-Bold", 12)
-    _watermark(); c.showPage(); c.save(); return out_path
+        if y < 3.0*cm:
+            c.showPage(); _watermark(); y = h-3.0*cm; c.setFont("Helvetica-Bold", 12)
+    c.showPage(); c.save(); return out_path
 
 def split_text(text, max_chars=100):
     words = text.split(); out=[]; cur=""
     for w in words:
-        if len(cur)+len(w)+1 <= max_chars: cur=(cur+" "+w).strip()
-        else: out.append(cur); cur=w
-    if cur: out.append(cur)
+        if len(cur)+len(w)+1 <= max_chars:
+            cur=(cur+" "+w).strip()
+        else:
+            out.append(cur); cur=w
+    if cur:
+        out.append(cur)
     return out

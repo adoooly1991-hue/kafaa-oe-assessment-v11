@@ -5,7 +5,6 @@ import yaml
 import os
 from datetime import datetime
 from streamlit_lottie import st_lottie
-import json
 
 from engine import (
     ProcessStep, score_wastes, make_observation, compute_lead_time,
@@ -13,45 +12,47 @@ from engine import (
 )
 from report import export_observations_pptx, export_observations_pdf
 
+# ---------- App setup ----------
 st.set_page_config(page_title="OE Assessment Report Generator", layout="wide")
 
 with open("templates.yaml","r", encoding="utf-8") as f:
     templates = yaml.safe_load(f)
 
-# --- Header (Kafaa) ---
-st.image("assets/kafaa_logo.png", width=170)
+# Branding (locked to Kafaa)
+BRAND_PRIMARY = templates.get('brand', {}).get('primary', '#C00000')
+BRAND_LOGO = templates.get('brand', {}).get('logo_path', 'assets/kafaa_logo.png')
+
+# Header
+st.image(BRAND_LOGO, width=170)
 st.title("OE Assessment Report Generator")
 
-# Sidebar
+# ---------- Sidebar ----------
 with st.sidebar:
     st.title("🧭 Navigation")
     lang = st.selectbox("Language / اللغة", ["en","ar"], index=0, key="lang")
     nav = st.radio("Go to", ["Welcome","Snapshot","Value Chain","Insights & Narratives","Export"], index=0, key="nav")
+
     st.markdown("---")
     st.header("⚙️ Global Settings")
     spacing_mode = st.selectbox("Map spacing uses", ["Effective CT","WIP"], index=0, key="spacing_mode")
     n_steps = st.number_input("Number of process steps", min_value=1, max_value=12, value=st.session_state.get('n_steps',5), step=1, key='n_steps')
+
     st.header("🏭 Factory / Report Meta")
     factory_name = st.text_input("Factory name", value=st.session_state.get('factory_name','[FactoryName]'), key='factory_name')
     report_year  = st.text_input("Report year", value=st.session_state.get('report_year', str(datetime.now().year)), key='report_year')
     est_cost     = st.text_input("Estimated handling cost (e.g., $250k)", value=st.session_state.get('est_cost','[cost]'), key='est_cost')
     est_sales    = st.text_input("Lost sales opportunity (e.g., $1.2M)", value=st.session_state.get('est_sales','[sales_opportunity]'), key='est_sales')
 
-    st.markdown('---')
-    
-            st.header('🎨 Brand Theme')
-            st.caption('Kafaa brand is locked for all users (colors and logo).')
-            st.write('- Primary: `#C00000`  
-- Secondary: `#FA0000`  
-- Accent: `#FF5B5B`  
-- Text: `#3F3F3F`  
-- Muted: `#7F7F7F`  
-- Background: `#F2F2F2`')
-            st.image("assets/kafaa_logo.png", width=140)
-            st.session_state['brand_primary'] = '#C00000'
-            st.session_state['brand_logo_path'] = 'assets/kafaa_logo.png'
+    st.markdown("---")
+    st.header("🎨 Brand Theme")
+    st.caption("Kafaa brand is locked for all users (colors and logo).")
+    st.write("- Primary: `#C00000`  \n- Secondary: `#FA0000`  \n- Accent: `#FF5B5B`  \n- Text: `#3F3F3F`  \n- Muted: `#7F7F7F`  \n- Background: `#F2F2F2`")
+    st.image(BRAND_LOGO, width=140)
+    # ensure in session for exporters
+    st.session_state['brand_primary'] = BRAND_PRIMARY
+    st.session_state['brand_logo_path'] = BRAND_LOGO
 
-st.markdown("---")
+    st.markdown("---")
     with st.expander("💾 Save / Load Project"):
         c1, c2 = st.columns(2)
         with c1:
@@ -71,7 +72,8 @@ st.markdown("---")
                 }
                 path = "oe_snapshot.json"
                 with open(path, "w", encoding="utf-8") as f:
-                    import json; json.dump(payload, f, ensure_ascii=False, indent=2)
+                    import json
+                    json.dump(payload, f, ensure_ascii=False, indent=2)
                 with open(path, "rb") as f:
                     st.download_button("Download JSON", f, file_name="oe_snapshot.json")
         with c2:
@@ -106,10 +108,11 @@ st.markdown("---")
             del st.session_state[k]
         st.success("Session cleared.")
 
+# RTL if Arabic
 if st.session_state.get('lang','en')=='ar':
     st.markdown('<style>body {direction: rtl; text-align: right;}</style>', unsafe_allow_html=True)
 
-# Init state
+# ---------- State init ----------
 def _init_state():
     st.session_state.setdefault("steps", [])
     st.session_state.setdefault("obs_df", pd.DataFrame())
@@ -155,15 +158,22 @@ def ensure_default_steps():
             for i in range(1, int(st.session_state.get('n_steps',5))+1)
         ]
 
-# WELCOME
+# ---------- Pages ----------
 if st.session_state["nav"] == "Welcome":
     left, right = st.columns([2,1])
     with left:
         st.subheader("Welcome to your guided Gemba story")
-        st.write("""This app helps you run an Operational Excellence assessment in minutes—not weeks.
-        Enter just the basics, answer a few stage questions, and we’ll generate observations, a current state map,
-        and a Kafaa-branded report—ready for leadership.""")
-        st.markdown("- **Minimal inputs** with confidence markers (● measured / ◐ mixed / ○ inferred)\n- **Guided questions** per value-chain stage\n- **Auto observations** + PQCDSM narrative + photos\n- **Exports** to PPTX/PDF (Kafaa theme)")
+        st.write(
+            "This app helps you run an Operational Excellence assessment in minutes—not weeks. "
+            "Enter just the basics, answer a few stage questions, and we’ll generate observations, "
+            "a current state map, and a Kafaa-branded report—ready for leadership."
+        )
+        st.markdown(
+            "- **Minimal inputs** with confidence markers (● measured / ◐ mixed / ○ inferred)\n"
+            "- **Guided questions** per value-chain stage\n"
+            "- **Auto observations** + PQCDSM narrative + photos\n"
+            "- **Exports** to PPTX/PDF (Kafaa theme)"
+        )
     with right:
         try:
             import requests
@@ -173,7 +183,6 @@ if st.session_state["nav"] == "Welcome":
         except Exception:
             st.info("Let's begin → use the left sidebar to move to Snapshot")
 
-# SNAPSHOT / PROCESS DESIGNER
 elif st.session_state["nav"] == "Snapshot":
     ensure_default_steps()
     st.subheader("Define your process steps")
@@ -208,10 +217,12 @@ elif st.session_state["nav"] == "Snapshot":
                 ans = s.answers or {}
                 with qtabs[0]:
                     trend = st.selectbox(f"{s.id} Defect trend (last 4 weeks)", ["(skip)","Rising","Stable","Falling"], index=0, key=f"{s.id}-q-def-trend")
-                    if trend != "(skip)": ans.setdefault("defects", {})["trend"] = trend
+                    if trend != "(skip)":
+                        ans.setdefault("defects", {})["trend"] = trend
                 with qtabs[1]:
                     freq = st.selectbox(f"{s.id} Starved/blocked frequency", ["(skip)","Frequent","Occasional","Rare"], index=0, key=f"{s.id}-q-wait-freq")
-                    if freq != "(skip)": ans.setdefault("waiting", {})["frequency"] = freq
+                    if freq != "(skip)":
+                        ans.setdefault("waiting", {})["frequency"] = freq
 
                 st.markdown("**Photos (optional)** — attach evidence per waste; will appear on PPTX detail slides")
                 photo_tabs = st.tabs(["Defects","Waiting","Inventory","Transportation","Overprocessing","Motion","Overproduction","Talent","Safety"])
@@ -239,7 +250,6 @@ elif st.session_state["nav"] == "Snapshot":
                             st.image(p, caption=os.path.basename(p), use_column_width=True)
                 s.answers = ans
 
-# VALUE CHAIN
 elif st.session_state["nav"] == "Value Chain":
     st.subheader("End-to-End Stages")
     vc = templates.get("value_chain", {})
@@ -254,11 +264,15 @@ elif st.session_state["nav"] == "Value Chain":
                 sid = stage["id"]
                 vc_scores[sid] = vc_scores.get(sid, {})
                 q1 = st.selectbox(f"{stage['name']}: Supply/Flow stability", ["(skip)","Poor","Average","Good"], index=0, key=f"vc-{sid}-q1")
-                if q1 == "Poor": vc_scores[sid]["waiting"] = vc_scores[sid].get("waiting",0)+1.0
-                if q1 == "Average": vc_scores[sid]["waiting"] = vc_scores[sid].get("waiting",0)+0.5
+                if q1 == "Poor":
+                    vc_scores[sid]["waiting"] = vc_scores[sid].get("waiting",0)+1.0
+                if q1 == "Average":
+                    vc_scores[sid]["waiting"] = vc_scores[sid].get("waiting",0)+0.5
                 q2 = st.selectbox(f"{stage['name']}: Quality leakage", ["(skip)","High","Medium","Low"], index=0, key=f"vc-{sid}-q2")
-                if q2 == "High": vc_scores[sid]["defects"] = vc_scores[sid].get("defects",0)+1.0
-                if q2 == "Medium": vc_scores[sid]["defects"] = vc_scores[sid].get("defects",0)+0.5
+                if q2 == "High":
+                    vc_scores[sid]["defects"] = vc_scores[sid].get("defects",0)+1.0
+                if q2 == "Medium":
+                    vc_scores[sid]["defects"] = vc_scores[sid].get("defects",0)+0.5
                 st.caption("Top-3 (live)")
                 ranked = sorted(vc_scores[sid].items(), key=lambda kv: kv[1], reverse=True)
                 st.write(ranked[:3])
@@ -275,13 +289,13 @@ elif st.session_state["nav"] == "Value Chain":
             vc_summary.append({"stage_name": stg["name"], "top3": top3, "issues": issues})
         st.session_state["vc_summary"] = vc_summary
 
-# INSIGHTS
 elif st.session_state["nav"] == "Insights & Narratives":
     st.subheader("Generate insights")
     if st.button("Run analysis", type="primary"):
         steps = st.session_state["steps"] or []
         if not steps:
-            st.warning("Please add steps in Snapshot first."); st.stop()
+            st.warning("Please add steps in Snapshot first.")
+            st.stop()
         result = compute_lead_time(steps, available_time_sec=8*3600.0)
         st.session_state["result"] = result
 
@@ -290,11 +304,11 @@ elif st.session_state["nav"] == "Insights & Narratives":
             wres = score_wastes(s, templates["thresholds"], templates=templates)
             for waste in ["defects","waiting","inventory","overproduction","transportation","motion","overprocessing","talent","safety"]:
                 row = make_observation(s, waste, wres, templates, templates["thresholds"])
-                if row: rows.append(row)
+                if row:
+                    rows.append(row)
         obs = pd.DataFrame(rows)
         if not obs.empty:
             obs = obs.sort_values(["rpn_pct","score_0_5"], ascending=False).reset_index(drop=True)
-            # Evidence markers
             id_to_step = {s.id:s for s in steps}
             ev_list=[]; mk_list=[]; tip_list=[]
             for r in obs.itertuples(index=False):
@@ -311,9 +325,12 @@ elif st.session_state["nav"] == "Insights & Narratives":
                     elif w=='overproduction': primary = True
                     elif w=='safety': primary = (stp.safety_incidents or 0)>0
                 dlt,_ = get_questionnaire_effects(stp, templates, w) if stp else (0.0,[])
-                if primary and dlt>0: ev='Mixed'
-                elif primary: ev='Measured'
-                else: ev='Inferred'
+                if primary and dlt>0:
+                    ev='Mixed'
+                elif primary:
+                    ev='Measured'
+                else:
+                    ev='Inferred'
                 mk = '●' if ev=='Measured' else ('◐' if ev=='Mixed' else '○')
                 tip = 'Measured: direct metrics' if ev=='Measured' else ('Mixed: metrics + questionnaire' if ev=='Mixed' else 'Inferred: questionnaire/heuristics')
                 ev_list.append(ev); mk_list.append(mk); tip_list.append(tip)
@@ -327,9 +344,12 @@ elif st.session_state["nav"] == "Insights & Narratives":
     if st.session_state.get("result"):
         res = st.session_state["result"]
         c1, c2, c3 = st.columns(3)
-        with c1: st.metric("Total Lead Time (sec)", f"{int(res['lead_time_sec'])}")
-        with c2: st.metric("Bottleneck CT (sec)", f"{int(res['ct_bottleneck_sec'])}")
-        with c3: st.metric("Observations", f"{len(st.session_state.get('obs_df', pd.DataFrame()))}")
+        with c1:
+            st.metric("Total Lead Time (sec)", f"{int(res['lead_time_sec'])}")
+        with c2:
+            st.metric("Bottleneck CT (sec)", f"{int(res['ct_bottleneck_sec'])}")
+        with c3:
+            st.metric("Observations", f"{len(st.session_state.get('obs_df', pd.DataFrame()))}")
 
     obs = st.session_state.get("obs_df", pd.DataFrame())
     if not obs.empty:
@@ -339,16 +359,16 @@ elif st.session_state["nav"] == "Insights & Narratives":
         st.subheader("Narrative by Theme (PQCDSM)")
         for code, name in theme_order:
             grp = obs[obs["theme_code"]==code]
-            if grp.empty: continue
+            if grp.empty:
+                continue
             with st.expander(f"{code} — {name}", expanded=False):
                 for idx, r in enumerate(grp.itertuples(index=False), start=1):
                     num = f"{code}-{idx}"
-                    st.markdown(f"**{num}: {r.step_name} — {r.waste.title()}**  \n{getattr(r,'observation','')}")
+                    st.markdown(f"**{num}: {r.step_name} — {r.waste.title()}**  \\n{getattr(r,'observation','')}")
 
         st.subheader("Material Flow Narrative")
         st.write(st.session_state.get("material_flow_text",""))
 
-# EXPORT
 elif st.session_state["nav"] == "Export":
     colA, colB = st.columns(2)
     with colA:
@@ -357,7 +377,8 @@ elif st.session_state["nav"] == "Export":
         if st.button("Export PPTX", type="primary"):
             obs_df = st.session_state.get("obs_df", pd.DataFrame())
             if obs_df.empty:
-                st.warning("Generate insights first."); st.stop()
+                st.warning("Generate insights first.")
+                st.stop()
             steps = st.session_state.get("steps", [])
             perstep_top2 = {}
             for s in steps:
@@ -366,11 +387,7 @@ elif st.session_state["nav"] == "Export":
                 perstep_top2[s.id] = [(name,score) for name,score in ranked if score>0][:2]
             result = st.session_state.get("result", {"by_step":{}})
             ct_eff_map = {sid: result.get("by_step",{}).get(sid,{}).get("ct_eff_sec",0.0) for sid in result.get("by_step",{}).keys()}
-            template_path = None
-            if template_master is not None:
-                template_path = os.path.join('uploads','_template_master.pptx')
-                os.makedirs('uploads', exist_ok=True)
-                with open(template_path,'wb') as out: out.write(template_master.getbuffer())
+            template_path = None  # use default from templates.yaml
             path = export_observations_pptx(
                 obs_df, "oe_assessment.pptx",
                 steps=steps, perstep_top2=perstep_top2,
@@ -382,8 +399,8 @@ elif st.session_state["nav"] == "Export":
                 template_path=template_path,
                 lang=st.session_state.get("lang","en"),
                 i18n=templates.get("i18n",{}),
-                brand_primary=st.session_state.get('brand_primary','#C61F32'),
-                logo_path=st.session_state.get('brand_logo_path','assets/kafaa_logo.png')
+                brand_primary=st.session_state.get('brand_primary',BRAND_PRIMARY),
+                logo_path=st.session_state.get('brand_logo_path',BRAND_LOGO)
             )
             st.success(f"PPTX created: {path}")
             with open(path, "rb") as f:
@@ -392,8 +409,13 @@ elif st.session_state["nav"] == "Export":
         if st.button("Export PDF"):
             obs_df = st.session_state.get("obs_df", pd.DataFrame())
             if obs_df.empty:
-                st.warning("Generate insights first."); st.stop()
-            path = export_observations_pdf(obs_df, "oe_assessment.pdf", brand_primary=st.session_state.get('brand_primary','#C00000'), logo_path=st.session_state.get('brand_logo_path','assets/kafaa_logo.png'))
+                st.warning("Generate insights first.")
+                st.stop()
+            path = export_observations_pdf(
+                obs_df, "oe_assessment.pdf",
+                brand_primary=st.session_state.get('brand_primary',BRAND_PRIMARY),
+                logo_path=st.session_state.get('brand_logo_path',BRAND_LOGO)
+            )
             st.success(f"PDF created: {path}")
             with open(path, "rb") as f:
                 st.download_button("Download PDF", f, file_name="OE_Assessment_Report.pdf")
