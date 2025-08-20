@@ -1,0 +1,41 @@
+
+# === EDIT compute_pace signature and body in engine.py ===
+def compute_pace(vc_summary, savings, templates, objective_weights=None, profile_key=None, measured=None, history=None):
+    prio = templates.get("prioritization", {})
+    obj2w = prio.get("objective_to_waste", {})
+    if not objective_weights:
+        objective_weights = {o["id"]: o.get("weight",1.0) for o in prio.get("critical_objectives",[])}
+    total_w = sum(objective_weights.values()) or 1.0
+    obj_norm = {k: float(v)/total_w for k,v in objective_weights.items()}
+
+    waste_weight = {}
+    for obj, ow in obj_norm.items():
+        for w, coef in obj2w.get(obj, {}).items():
+            waste_weight[w] = waste_weight.get(w, 0.0) + ow*float(coef)
+
+    present = {}
+    for row in (vc_summary or []):
+        for w, sc in row.get("top3", []):
+            present[w] = present.get(w, 0.0) + float(sc or 0.0)
+
+    by_waste = (savings or {}).get("by_waste", {}) if savings else {}
+
+    # NEW: true Edge multipliers
+    edge = compute_edge_percentiles(templates, profile_key=profile_key, measured=measured, history=history)
+
+    import math
+    combined = {}
+    for w in set(list(present.keys()) + list(by_waste.keys()) + list(waste_weight.keys())):
+        sev = present.get(w, 0.0)/max(1.0, len(vc_summary))  # avg stage score 0..5
+        ben = float(by_waste.get(w, 0.0))
+        ww  = float(waste_weight.get(w, 0.0))
+        combined[w] = (sev/5.0) * (1.0 + ww) * edge.get(w,1.0) * (math.log10(ben + 10.0))
+    top_wastes = sorted(combined.items(), key=lambda x: x[1], reverse=True)
+
+    badge_min = prio.get("kpi_badge",{}).get("min_tracked", 4)
+    weights = list(objective_weights.values()) or [1.0]
+    med = sorted(weights)[len(weights)//2]
+    tracked = sum(1 for v in weights if v >= med)
+    badge = {"enabled": tracked >= badge_min, "tracked": tracked, "required": badge_min}
+
+    return {"top_wastes": top_wastes, "waste_weight": waste_weight, "badge": badge, "edge": edge}

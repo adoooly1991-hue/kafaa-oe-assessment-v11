@@ -1,0 +1,22 @@
+
+# === EDIT propose_countermeasures signature/body in engine.py ===
+def propose_countermeasures(vc_summary, templates, savings=None, max_per_stage=3, profile_key=None, include_generic=True, pace=None):
+    # (existing merging logic stays the same)
+    # ...
+    # After computing 'actions' list with est_annual_benefit:
+    # Apply PACE weighting by waste ranking
+    if pace and pace.get("top_wastes"):
+        rank_map = {w: i+1 for i,(w,_) in enumerate(pace["top_wastes"])}
+        for a in actions:
+            r = rank_map.get(a["waste"].lower(), None)
+            if r is not None:
+                # Top 2 wastes => Now, Top 3-4 => Next, else Later (unless effort low & high benefit)
+                if r <= 2:
+                    a["priority"] = "Now"
+                elif r <= 4 and a.get("priority") != "Now":
+                    a["priority"] = "Next"
+                else:
+                    a["priority"] = a.get("priority","Later")
+                # Slight benefit boost for ranked wastes (nudge order)
+                a["est_annual_benefit"] *= (1.0 + max(0.0, 0.15*(max(0, 6 - r))))
+                a["est_annual_benefit_fmt"] = f"{a['est_annual_benefit']:,.0f} {templates.get('assumptions',{}).get('currency','SAR')}"

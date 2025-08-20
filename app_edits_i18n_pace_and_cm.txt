@@ -1,0 +1,65 @@
+
+# === EDITS in app.py ===
+# Sidebar language toggle (default English)
+lang = st.sidebar.selectbox("Language", ["en","ar"], format_func=lambda x: "English" if x=="en" else "العربية", key="lang")
+i18n = templates.get("i18n",{}).get("pace",{}).get(lang, templates.get("i18n",{}).get("pace",{}).get("en", {}))
+
+# In the PACE page block:
+elif st.session_state["nav"] == "Kafaa PACE":
+    st.subheader(i18n.get("title","Kafaa PACE — Prioritization Engine"))
+    st.caption("Present • Advantage • Critical • Edge")
+
+    # Critical
+    st.markdown(f"### {i18n.get('critical','Critical — choose what matters most now')}")
+    cols = st.columns(6)
+    obj_weights = {}
+    labels = i18n.get("objectives",{})
+    for i, obj in enumerate(templates.get("prioritization",{}).get("critical_objectives", [])):
+        with cols[i%6]:
+            label = labels.get(obj["id"], obj["name"])
+            obj_weights[obj["id"]] = st.slider(label, 0.0, 2.0, float(obj.get("weight",1.0)), 0.1, key=f"pace-obj-{obj['id']}")
+    st.session_state["pace_objectives"] = obj_weights
+
+    # Present
+    st.markdown(f"### {i18n.get('present','Present — baseline signals')}")
+    # (existing preview)
+
+    # Advantage
+    st.markdown(f"### {i18n.get('advantage','Advantage — estimated annual benefit')}")
+    # (existing preview)
+
+    # Gather measured metrics for Edge (optional inputs on this page)
+    st.markdown("##### Enter measured values (optional) for better percentile matching")
+    em = {}
+    edge_map = templates.get("prioritization",{}).get("edge_metrics",{})
+    cols2 = st.columns(3)
+    i2 = 0
+    for w, cfg in edge_map.items():
+        with cols2[i2%3]:
+            key = cfg.get("key"); unit = cfg.get("unit","")
+            em[key] = st.number_input(f"{key} ({unit})", value=0.0, step=0.1, key=f"pace-meas-{key}")
+        i2 += 1
+    st.session_state["pace_measured"] = em
+
+    # Compute PACE with edge
+    from engine import compute_pace
+    pace = compute_pace(
+        st.session_state.get("vc_summary", []),
+        st.session_state.get("savings", {}),
+        templates,
+        objective_weights=obj_weights if obj_weights else None,
+        profile_key=st.session_state.get("profile_key"),
+        measured=st.session_state.get("pace_measured"),
+        history=st.session_state.get("pace_history")  # allow later upload of history dict
+    )
+    st.session_state["pace"] = pace
+
+    st.markdown(f"### {i18n.get('edge','Edge — combined priority (top themes)')}")
+    topw = pace.get("top_wastes", [])[:6]
+    st.write([f"{w.title()}" for w,_ in topw])
+    badge = pace.get("badge", {})
+    st.progress(min(1.0, badge.get("tracked",0)/max(1, badge.get("required",4))))
+    st.caption(f"{i18n.get('badge','Kafaa Readiness Badge progress')}: {badge.get('tracked',0)}/{badge.get('required',4)}")
+
+# In Countermeasures page call:
+actions = propose_countermeasures(vc_summary, templates, savings=savings, max_per_stage=max_stage, profile_key=profile_key, include_generic=include_generic, pace=st.session_state.get("pace"))

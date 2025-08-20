@@ -1,0 +1,42 @@
+
+# === ADD to templates.yaml ===
+i18n:
+  pace:
+    en:
+      title: "Kafaa PACE — Prioritization Engine"
+      present: "Present — baseline signals"
+      advantage: "Advantage — estimated annual benefit"
+      critical: "Critical — choose what matters most now"
+      edge: "Edge — combined priority (top themes)"
+      badge: "Kafaa Readiness Badge progress"
+      objectives:
+        prod: "Production/Throughput"
+        qual: "Quality"
+        cost: "Cost"
+        delv: "Delivery/OTIF"
+        safe: "Safety"
+        mora: "People & Morale"
+    ar:
+      title: "باقة كفاءة — محرك ترتيب الأولويات"
+      present: "الوضع الحالي — مؤشرات الأساس"
+      advantage: "الميزة — العائد السنوي المتوقع"
+      critical: "المهم — اختر ما يهم الآن"
+      edge: "الأفضلية — المواضيع ذات الأولوية"
+      badge: "شعار الجاهزية من كفاءة"
+      objectives:
+        prod: "الإنتاج/الطاقة"
+        qual: "الجودة"
+        cost: "التكلفة"
+        delv: "التسليم/الالتزام"
+        safe: "السلامة"
+        mora: "الأفراد والمعنويات"
+
+prioritization:
+  # Edge mapping: which metric represents each waste for percentile vs benchmark
+  edge_metrics:
+    defects: {key: "fpy_pct", higher_is_better: true, unit: "%"}
+    waiting: {key: "smed_changeover_min", higher_is_better: false, unit: "min"}
+    inventory: {key: "inventory_days", higher_is_better: false, unit: "days"}
+    transportation: {key: "loading_time_min", higher_is_better: false, unit: "min"}
+    overproduction: {key: "fg_aging_pct", higher_is_better: false, unit: "%"}
+    # motion/overprocessing/safety may not have a single easy metric; default to neutral if missing.

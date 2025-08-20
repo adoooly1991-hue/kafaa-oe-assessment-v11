@@ -1,13 +1,1447 @@
-
-assumptions:
-  currency: "SAR"
-  labor_cost_per_hour: 50.0
-  cost_of_capital_pct: 12.0
-  avg_monthly_volume_units: 10000.0
-
+thresholds:
+  defects_pct_high: 3.0
+  waiting_pct_high: 10.0
+  inventory_wip_high: 30.0
+  transport_distance_high_m: 30.0
+  motion_moves_high: 3
+  rework_pct_high: 2.0
+  safety_incidents_high: 1
+  downtime_pct_high: 15.0
+  changeover_freq_high: 3.0
+  changeover_time_high_min: 30.0
+  operators_high: 8.0
+  touchpoints_high: 6.0
+value_chain:
+  stages:
+  - id: inbound
+    name: Inbound Logistics
+  - id: storage
+    name: Raw Material Storage
+  - id: prep
+    name: Preparation/Setup
+  - id: manufacture
+    name: Manufacturing
+  - id: finish
+    name: Finishing/Coating
+  - id: fg
+    name: Finished Goods Storage
+  - id: outbound
+    name: Outbound Logistics
+  - id: customer
+    name: Delivery to Customer
+  questions:
+    inbound:
+    - id: late_deliveries
+      text: How often do suppliers deliver later than promised?
+      help: Late deliveries cause waiting and extra safety stock.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        waiting: 1.0
+        inventory: 0.6
+      issue_if_high: Supplier deliveries are frequently late, driving waiting time
+        and higher buffer inventory.
+      benchmark: 'Best practice: supplier OTD ≥ 95% (late deliveries ≤ 5%).'
+      followups:
+        trigger_score: 3
+        items:
+        - id: late_top_suppliers
+          text: Which suppliers are most often late? (type names)
+          type: text
+        - id: lt_contract
+          text: Are delivery lead-times contractually defined?
+          type: mc
+          choices:
+          - 'Yes'
+          - Partly
+          - 'No'
+        - id: supplier_scorecard
+          text: Do you keep a monthly supplier scorecard?
+          type: mc
+          choices:
+          - 'Yes'
+          - 'No'
+      bm_ref: supplier_otd_pct
+    - id: qty_mismatch
+      text: How often does the received quantity not match the PO?
+      help: Mismatches need rework and cause delays.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        overprocessing: 0.7
+        waiting: 0.6
+        defects: 0.4
+      issue_if_high: PO vs. delivery quantity mismatches are common, creating rework
+        and delays.
+    - id: incoming_quality
+      text: How often do incoming materials fail quality checks?
+      help: Poor incoming quality causes rework/scrap later.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        defects: 1.0
+        waiting: 0.5
+      issue_if_high: Incoming quality failures are frequent, adding rework and flow
+        interruptions.
+      benchmark: 'Best practice: incoming defect rate ≤ 0.5% (or DPPM ≤ 5000).'
+      followups:
+        trigger_score: 2
+        items:
+        - id: incoming_defect_types
+          text: Top 3 incoming defect types
+          type: text
+        - id: containment
+          text: Is there a quarantine/containment process?
+          type: mc
+          choices:
+          - 'Yes'
+          - 'No'
+    - id: unloading_wait
+      text: Do trucks wait to be unloaded?
+      help: Queueing trucks = waiting and extra handling.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        waiting: 0.8
+        transportation: 0.4
+      issue_if_high: Trucks queue for unloading, extending lead time and handling.
+    - id: lot_size
+      text: Are supplier lot sizes larger than a week of your demand?
+      help: Large lots increase inventory and risk obsolescence.
+      type: mc
+      choices:
+      - label: No (≤ 1 week)
+        score: 0
+      - label: Slightly (>1–2 weeks)
+        score: 1
+      - label: Moderate (≈1 month)
+        score: 2
+      - label: Large (1–3 months)
+        score: 3
+      - label: Very large (>3 months)
+        score: 4
+      waste_weights:
+        inventory: 1.0
+        overproduction: 0.6
+      issue_if_high: Supplier lot sizes are large versus demand, inflating inventory
+        and risk.
+    - id: asn_visibility
+      text: Do you have visibility of shipments before arrival (ASN / tracking)?
+      help: Low visibility leads to firefighting and waiting.
+      type: mc
+      choices:
+      - label: Full visibility
+        score: 0
+      - label: Partial (major suppliers)
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Rarely
+        score: 3
+      - label: No visibility
+        score: 4
+      waste_weights:
+        waiting: 0.7
+        overproduction: 0.3
+      issue_if_high: Limited shipment visibility creates surprises and idle time.
+    - id: safety_unload
+      text: Any safety incidents or near-misses during unloading in the last 3 months?
+      help: Unsafe unloading indicates motion/transport issues.
+      type: mc
+      choices:
+      - label: None
+        score: 0
+      - label: 1 incident/near-miss
+        score: 2
+      - label: 2–3
+        score: 3
+      - label: '>3'
+        score: 4
+      waste_weights:
+        safety: 1.0
+        transportation: 0.3
+      issue_if_high: Frequent safety issues during unloading.
+    - id: supplier_kanban
+      text: Do you use Kanban/consignment with suppliers?
+      help: Pull with suppliers reduces inventory.
+      type: mc
+      choices:
+      - label: Yes, widely
+        score: 0
+      - label: Partially
+        score: 1
+      - label: Pilots only
+        score: 2
+      - label: Planning to
+        score: 3
+      - label: 'No'
+        score: 4
+      waste_weights:
+        inventory: 0.8
+        waiting: 0.4
+      issue_if_high: No supplier pull/kanban, causing high inbound inventory.
+    storage:
+    - id: fifo
+      text: Is FIFO/FEFO followed in raw material storage?
+      help: Skipping FIFO causes aging and obsolescence.
+      type: mc
+      choices:
+      - label: Always
+        score: 0
+      - label: Mostly
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Rarely
+        score: 3
+      - label: Never
+        score: 4
+      waste_weights:
+        inventory: 0.9
+        defects: 0.2
+      issue_if_high: FIFO/FEFO is not followed consistently, creating aging stock.
+    - id: stock_accuracy
+      text: How accurate is the stock vs. system?
+      help: Low accuracy drives searching and delays.
+      type: mc
+      choices:
+      - label: '>=98% accurate'
+        score: 0
+      - label: 95–97%
+        score: 1
+      - label: 90–94%
+        score: 2
+      - label: 80–89%
+        score: 3
+      - label: <80%
+        score: 4
+      waste_weights:
+        waiting: 0.6
+        motion: 0.5
+        inventory: 0.6
+      issue_if_high: Low inventory accuracy leads to search, double handling, delays.
+      benchmark: 'Best practice: inventory record accuracy ≥ 98%.'
+      followups:
+        trigger_score: 2
+        items:
+        - id: ira_method
+          text: How do you verify accuracy?
+          type: mc
+          choices:
+          - Cycle count ABC
+          - Full count
+          - Ad-hoc
+        - id: ira_gap_rootcause
+          text: Main reason for mismatches (e.g., mis-scan, wrong UoM)
+          type: text
+      bm_ref: inventory_accuracy_pct
+    - id: space_util
+      text: Space utilization in RM warehouse?
+      help: Very full = hard to move; very empty = overbuilt.
+      type: mc
+      choices:
+      - label: <70%
+        score: 1
+      - label: 70–85%
+        score: 0
+      - label: 86–95%
+        score: 2
+      - label: '>95%'
+        score: 3
+      - label: Overstuffed / on floor
+        score: 4
+      waste_weights:
+        motion: 0.6
+        transportation: 0.4
+        inventory: 0.5
+      issue_if_high: Warehouse is overstuffed; long travel/search and extra handling.
+    - id: picking_time
+      text: How often do pickers spend >5 minutes to find an item?
+      help: Long searches indicate poor 5S or labeling.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        motion: 1.0
+        waiting: 0.6
+      issue_if_high: Frequent long searches for materials (labeling/5S issues).
+    - id: obsolete
+      text: Do you have obsolete or expired materials on hand?
+      help: Obsolete stock ties cash.
+      type: mc
+      choices:
+      - label: None
+        score: 0
+      - label: <1% of stock
+        score: 1
+      - label: 1–5%
+        score: 2
+      - label: 6–10%
+        score: 3
+      - label: '>10%'
+        score: 4
+      waste_weights:
+        inventory: 1.0
+        cost: 0.5
+      issue_if_high: Obsolete/expired materials occupy space and tie cash.
+    - id: replenishment
+      text: How are lines replenished from RM storage?
+      help: Manual push vs. pull signals.
+      type: mc
+      choices:
+      - label: Kanban/2-bin (pull)
+        score: 0
+      - label: Milk-run schedule
+        score: 1
+      - label: Ad-hoc by request
+        score: 2
+      - label: Batch push
+        score: 3
+      - label: Unplanned firefighting
+        score: 4
+      waste_weights:
+        waiting: 0.8
+        transportation: 0.5
+        overproduction: 0.5
+      issue_if_high: Replenishment is ad-hoc/push, creating waiting and surges.
+    - id: ergonomics
+      text: Any awkward lifts or reaches during picking?
+      help: Poor ergonomics = motion and safety risks.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        motion: 0.6
+        safety: 0.6
+      issue_if_high: Ergonomic risks during picking/put-away.
+    - id: cycle_count
+      text: Do you perform cycle counts regularly?
+      help: Counts prevent surprises.
+      type: mc
+      choices:
+      - label: Weekly by ABC
+        score: 0
+      - label: Monthly
+        score: 1
+      - label: Quarterly
+        score: 2
+      - label: Rarely
+        score: 3
+      - label: Never
+        score: 4
+      waste_weights:
+        inventory: 0.4
+        waiting: 0.4
+      issue_if_high: Cycle counting not routine; frequent stock surprises.
+    prep:
+    - id: changeover_time
+      text: Average changeover/setup time per switch?
+      help: Long changeovers cause waiting and big batches.
+      type: mc
+      choices:
+      - label: <10 min
+        score: 0
+      - label: 10–30 min
+        score: 1
+      - label: 31–60 min
+        score: 2
+      - label: 1–2 hours
+        score: 3
+      - label: '>2 hours'
+        score: 4
+      waste_weights:
+        waiting: 1.0
+        overproduction: 0.6
+        overprocessing: 0.6
+      issue_if_high: Lengthy changeovers drive big batches and waiting.
+      benchmark: 'Best practice: model changeover ≤ 10 min (SMED).'
+      followups:
+        trigger_score: 2
+        items:
+        - id: internal_external_split
+          text: What is the split of internal vs external steps? (e.g., 70/30)
+          type: text
+        - id: pre_kitting_used
+          text: Are tools & materials pre‑kitted?
+          type: mc
+          choices:
+          - Always
+          - Mostly
+          - Sometimes
+          - Rarely
+          - Never
+        - id: smed_actions
+          text: List 1–3 SMED actions you can try immediately.
+          type: text
+        - id: operators_n
+          text: Number of operators on affected line
+          type: num
+        - id: labor_cost_per_hour
+          text: Labor cost per hour (currency)
+          type: num
+        - id: changeovers_per_month
+          text: Changeovers per month
+          type: num
+      bm_ref: smed_changeover_min
+    - id: changeover_freq
+      text: How many changeovers per shift?
+      help: Frequent changeovers need SMED.
+      type: mc
+      choices:
+      - label: 0–1
+        score: 0
+      - label: 2–3
+        score: 1
+      - label: 4–6
+        score: 2
+      - label: 7–9
+        score: 3
+      - label: '>9'
+        score: 4
+      waste_weights:
+        waiting: 0.5
+        overprocessing: 0.7
+      issue_if_high: Frequent changeovers with limited standardization.
+    - id: pre_kitting
+      text: Are tools/materials pre-kitted before setup starts?
+      help: Pre-kitting reduces downtime.
+      type: mc
+      choices:
+      - label: Always
+        score: 0
+      - label: Mostly
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Rarely
+        score: 3
+      - label: Never
+        score: 4
+      waste_weights:
+        waiting: 0.8
+        motion: 0.6
+      issue_if_high: Lack of pre-kitting extends setup and movement.
+    - id: first_piece
+      text: Time to first good piece after changeover?
+      help: Approval delays add waiting/defects.
+      type: mc
+      choices:
+      - label: <5 min
+        score: 0
+      - label: 5–15 min
+        score: 1
+      - label: 16–30 min
+        score: 2
+      - label: 31–60 min
+        score: 3
+      - label: '>60 min'
+        score: 4
+      waste_weights:
+        waiting: 0.8
+        defects: 0.5
+      issue_if_high: Long first-piece approval after changeover.
+    - id: standard_work
+      text: Do you have a standard checklist for setups?
+      help: Standards reduce variability.
+      type: mc
+      choices:
+      - label: Yes, followed
+        score: 0
+      - label: Yes, not always followed
+        score: 2
+      - label: 'No'
+        score: 4
+      waste_weights:
+        overprocessing: 0.5
+        defects: 0.6
+        waiting: 0.4
+      issue_if_high: No consistent setup standards; misses and rework occur.
+    - id: spares_avail
+      text: Are spare parts/tooling readily available?
+      help: Hunting for tooling adds motion/waiting.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        motion: 0.6
+        waiting: 0.6
+      issue_if_high: Tooling/spares availability causes delays and movement.
+    - id: skills
+      text: Are operators trained to perform setups without supervision?
+      help: Low skill leads to delays.
+      type: mc
+      choices:
+      - label: All
+        score: 0
+      - label: Most
+        score: 1
+      - label: Some
+        score: 2
+      - label: Few
+        score: 3
+      - label: None
+        score: 4
+      waste_weights:
+        waiting: 0.5
+        talent: 0.8
+      issue_if_high: Setup relies on few experts; delays when absent.
+    - id: 5s
+      text: Is the setup area 5S organized (shadow boards, labels)?
+      help: Disorder adds motion and mistakes.
+      type: mc
+      choices:
+      - label: Excellent
+        score: 0
+      - label: Good
+        score: 1
+      - label: Fair
+        score: 2
+      - label: Poor
+        score: 3
+      - label: Very poor
+        score: 4
+      waste_weights:
+        motion: 0.6
+        defects: 0.4
+      issue_if_high: 5S in setup area is weak; excess motion and errors.
+    manufacture:
+    - id: availability
+      text: How often does equipment stop unexpectedly?
+      help: Breakdowns cut availability.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        waiting: 1.0
+        safety: 0.2
+      issue_if_high: Frequent unplanned stops reduce output and create queues.
+    - id: speed_loss
+      text: Do machines frequently run below their rated speed?
+      help: Speed loss causes longer CT.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        waiting: 0.8
+        overprocessing: 0.4
+      issue_if_high: Chronic speed loss increases cycle time.
+    - id: first_pass_yield
+      text: First-pass yield (no rework) on this step?
+      help: Lower FPY = more defects and rework.
+      type: mc
+      choices:
+      - label: '>=99%'
+        score: 0
+      - label: 98–98.9%
+        score: 1
+      - label: 95–97.9%
+        score: 2
+      - label: 90–94.9%
+        score: 3
+      - label: <90%
+        score: 4
+      waste_weights:
+        defects: 1.0
+        overprocessing: 0.6
+      issue_if_high: Low first-pass yield; significant rework.
+      benchmark: 'Best practice: FPY ≥ 98%.'
+      followups:
+        trigger_score: 2
+        items:
+        - id: top_defect_causes
+          text: Top 3 defect causes?
+          type: text
+        - id: spc_present
+          text: Is SPC/andon in place at this step?
+          type: mc
+          choices:
+          - 'Yes'
+          - Partly
+          - 'No'
+        - id: unit_material_cost
+          text: Material + processing cost per unit (currency)
+          type: num
+        - id: monthly_volume_units
+          text: Average monthly volume (units)
+          type: num
+        - id: rework_time_min
+          text: Rework time per defective unit (min)
+          type: num
+      bm_ref: fpy_pct
+    - id: wip_queues
+      text: Are there visible queues/WIP before this step?
+      help: Queues indicate mismatched flow.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        inventory: 1.0
+        waiting: 0.6
+      issue_if_high: Large queues accumulate before the process.
+    - id: balancing
+      text: Is work balanced across operators/machines?
+      help: Imbalance creates bottlenecks and idling.
+      type: mc
+      choices:
+      - label: Well balanced
+        score: 0
+      - label: Mostly
+        score: 1
+      - label: Some imbalance
+        score: 2
+      - label: Often imbalanced
+        score: 3
+      - label: Severely imbalanced
+        score: 4
+      waste_weights:
+        waiting: 0.8
+        motion: 0.4
+      issue_if_high: Line is imbalanced; frequent bottlenecks.
+    - id: defect_sources
+      text: Are the main defect causes known & controlled?
+      help: Unknown causes lead to recurring scrap.
+      type: mc
+      choices:
+      - label: Yes (SPC/andon in place)
+        score: 0
+      - label: Partly known
+        score: 2
+      - label: Unknown
+        score: 4
+      waste_weights:
+        defects: 1.0
+      issue_if_high: Defect causes not well understood; recurrence likely.
+    - id: overprocessing
+      text: Any steps that don’t add value (re-checks, duplicate data entry)?
+      help: Non-value tasks lengthen time.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        overprocessing: 1.0
+      issue_if_high: Non-value activities present (rechecks, duplication).
+    - id: ergonomics_prod
+      text: Any awkward or repetitive motions for operators?
+      help: Ergonomics drives motion waste and risk.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        motion: 0.8
+        safety: 0.4
+      issue_if_high: Repetitive/awkward motions raise risk and time.
+    finish:
+    - id: changeover_color
+      text: How long to switch colors/recipes?
+      help: Color changes extend changeovers.
+      type: mc
+      choices:
+      - label: <5 min
+        score: 0
+      - label: 5–15 min
+        score: 1
+      - label: 16–30 min
+        score: 2
+      - label: 31–60 min
+        score: 3
+      - label: '>60 min'
+        score: 4
+      waste_weights:
+        waiting: 0.8
+        overprocessing: 0.5
+      issue_if_high: Color/recipe changeovers are lengthy.
+    - id: rework_coating
+      text: How often does finishing require rework?
+      help: Rework wastes time and materials.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        defects: 1.0
+        overprocessing: 0.6
+      issue_if_high: High rework rate in finishing.
+    - id: hang_unhang
+      text: Is hanging/unhanging manual and time-consuming?
+      help: Manual handling adds motion.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        motion: 0.8
+        transportation: 0.4
+      issue_if_high: Manual hang/unhang adds motion and waiting.
+      benchmark: 'Best practice: hanging/unhanging automated or ≤ 10 sec per piece.'
+      followups:
+        trigger_score: 2
+        items:
+        - id: ergonomic_risk
+          text: Any ergonomic risks identified by HSE?
+          type: mc
+          choices:
+          - 'Yes'
+          - 'No'
+    - id: line_stops
+      text: Does the finishing line stop waiting for upstream material?
+      help: Indicates imbalance.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        waiting: 0.9
+        inventory: 0.4
+      issue_if_high: Finishing often starved due to upstream issues.
+    - id: overcoat
+      text: Do you sometimes overcoat/overfinish to be safe?
+      help: Overprocessing & material waste.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        overprocessing: 0.9
+        cost: 0.3
+      issue_if_high: Overcoating applied as a safeguard.
+    - id: inspection_block
+      text: Does inspection create bottlenecks?
+      help: QA queues add waiting.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        waiting: 0.8
+        overprocessing: 0.6
+      issue_if_high: Inspection/approval frequently blocks flow.
+    - id: fume_safety
+      text: Any safety or environmental incidents recently?
+      help: EHS issues
+      type: mc
+      choices:
+      - label: None
+        score: 0
+      - label: Near-misses only
+        score: 2
+      - label: Minor incidents
+        score: 3
+      - label: Major incident
+        score: 4
+      waste_weights:
+        safety: 1.0
+      issue_if_high: Recent safety/environment incidents at finishing.
+    - id: layout_moves
+      text: Do items travel back-and-forth between areas?
+      help: Poor layout causes transport waste.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        transportation: 1.0
+        motion: 0.5
+      issue_if_high: Back-and-forth travel between finishing areas.
+    fg:
+    - id: fg_fifo
+      text: Is FIFO/FEFO followed in finished-goods storage?
+      help: Skipping FIFO causes aging stock.
+      type: mc
+      choices:
+      - label: Always
+        score: 0
+      - label: Mostly
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Rarely
+        score: 3
+      - label: Never
+        score: 4
+      waste_weights:
+        inventory: 1.0
+      issue_if_high: FG FIFO not followed; aging inventory.
+    - id: aging_fg
+      text: '% of FG older than agreed days (e.g., 30/60)?'
+      help: Aged FG = overproduction.
+      type: mc
+      choices:
+      - label: <5%
+        score: 0
+      - label: 5–10%
+        score: 1
+      - label: 11–20%
+        score: 2
+      - label: 21–35%
+        score: 3
+      - label: '>35%'
+        score: 4
+      waste_weights:
+        inventory: 1.0
+        overproduction: 0.6
+      issue_if_high: Significant aged finished goods.
+      benchmark: 'Best practice: FG older than 30/60 days ≤ 5%.'
+      followups:
+        trigger_score: 2
+        items:
+        - id: aging_reason
+          text: Main reason for aged FG (e.g., low demand, custom spec, batch policy).
+          type: text
+        - id: avg_fg_value
+          text: Average FG value (currency)
+          type: num
+        - id: finance_rate_pct
+          text: Finance rate / cost of capital (%)
+          type: num
+      bm_ref: fg_aging_pct
+    - id: pick_errors
+      text: Frequency of picking/shipping mistakes
+      help: Pick errors cause returns and delays.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        defects: 0.8
+        waiting: 0.4
+      issue_if_high: Frequent pick/ship errors.
+    - id: staging_space
+      text: Is there enough staging space for outbound loads?
+      help: Tight space creates congestion.
+      type: mc
+      choices:
+      - label: Always enough
+        score: 0
+      - label: Usually
+        score: 1
+      - label: Sometimes tight
+        score: 2
+      - label: Often tight
+        score: 3
+      - label: Always congested
+        score: 4
+      waste_weights:
+        motion: 0.6
+        waiting: 0.6
+      issue_if_high: Outbound staging is congested.
+    - id: handling_fg
+      text: How many times is FG handled before shipping?
+      help: Extra handling = motion/transport.
+      type: mc
+      choices:
+      - label: 1 (pick & load)
+        score: 0
+      - label: '2'
+        score: 1
+      - label: '3'
+        score: 2
+      - label: '4'
+        score: 3
+      - label: '>=5'
+        score: 4
+      waste_weights:
+        motion: 0.8
+        transportation: 0.8
+      issue_if_high: Multiple FG handling steps before shipping.
+    - id: mixups
+      text: Do different customer orders get mixed in the same pallet/area?
+      help: Mix-ups cause rework/delays.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        defects: 0.6
+        waiting: 0.6
+      issue_if_high: Order mix-ups in FG area.
+    - id: fg_visibility
+      text: Is there real-time visibility of FG (location & status)?
+      help: Poor visibility causes searching and delays.
+      type: mc
+      choices:
+      - label: Full (WMS)
+        score: 0
+      - label: Partial
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Rarely
+        score: 3
+      - label: None
+        score: 4
+      waste_weights:
+        waiting: 0.5
+        motion: 0.4
+      issue_if_high: Limited FG visibility (no WMS/labels).
+    - id: safety_fg
+      text: Any safety incidents in FG area recently?
+      help: Incidents slow operations.
+      type: mc
+      choices:
+      - label: None
+        score: 0
+      - label: Near-miss
+        score: 2
+      - label: Minor
+        score: 3
+      - label: Major
+        score: 4
+      waste_weights:
+        safety: 1.0
+      issue_if_high: Recent safety incidents in FG.
+    outbound:
+    - id: truck_wait
+      text: Do trucks wait to be loaded?
+      help: Waiting trucks = poor staging or paperwork.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        waiting: 1.0
+        transportation: 0.4
+      issue_if_high: Trucks frequently wait for loading.
+    - id: loading_time
+      text: Typical loading time per truck?
+      help: Long load times signal poor flow/space.
+      type: mc
+      choices:
+      - label: <20 min
+        score: 0
+      - label: 20–40 min
+        score: 1
+      - label: 41–60 min
+        score: 2
+      - label: 61–90 min
+        score: 3
+      - label: '>90 min'
+        score: 4
+      waste_weights:
+        waiting: 0.9
+        motion: 0.4
+      issue_if_high: Loading takes long due to space/tools/process.
+      followups:
+        trigger_score: 3
+        items:
+        - id: loads_per_day
+          text: Average truck loads per day
+          type: num
+        - id: forklift_cost_per_hour
+          text: Forklift cost per hour (currency)
+          type: num
+    - id: paperwork
+      text: Is paperwork often incorrect or incomplete?
+      help: Docs cause rework & customs delays.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        overprocessing: 0.7
+        waiting: 0.6
+      issue_if_high: Paperwork errors cause delays and rework.
+    - id: damage
+      text: Any damage during loading/transport reported?
+      help: Damage is waste & customer pain.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        defects: 0.8
+        transportation: 0.6
+      issue_if_high: Frequent damage during loading/transport.
+    - id: otif
+      text: On-time, in-full (OTIF) to customers?
+      help: Low OTIF indicates system loss.
+      type: mc
+      choices:
+      - label: '>=95%'
+        score: 0
+      - label: 90–94%
+        score: 1
+      - label: 80–89%
+        score: 2
+      - label: 70–79%
+        score: 3
+      - label: <70%
+        score: 4
+      waste_weights:
+        waiting: 0.7
+        defects: 0.4
+        overproduction: 0.2
+      issue_if_high: OTIF performance is low; frequent late/partial deliveries.
+      benchmark: 'Best practice: OTIF ≥ 95%.'
+      followups:
+        trigger_score: 2
+        items:
+        - id: otif_reason
+          text: Main reason for OTIF misses.
+          type: text
+      bm_ref: otif_pct
+    - id: route_planning
+      text: Do you optimize routes/combining shipments?
+      help: Poor planning adds transport waste.
+      type: mc
+      choices:
+      - label: Yes (TMS)
+        score: 0
+      - label: Partially
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Rarely
+        score: 3
+      - label: 'No'
+        score: 4
+      waste_weights:
+        transportation: 1.0
+        cost: 0.4
+      issue_if_high: Limited route optimization increases transport time/cost.
+    - id: returns
+      text: Return rate due to outbound errors?
+      help: Returns = rework & cost.
+      type: mc
+      choices:
+      - label: <0.5%
+        score: 0
+      - label: 0.5–1%
+        score: 1
+      - label: 1–2%
+        score: 2
+      - label: 2–3%
+        score: 3
+      - label: '>3%'
+        score: 4
+      waste_weights:
+        defects: 0.8
+        overprocessing: 0.4
+      issue_if_high: High returns from outbound mistakes.
+    - id: safety_outbound
+      text: Any safety incidents at docks/yard recently?
+      help: Safety affects flow.
+      type: mc
+      choices:
+      - label: None
+        score: 0
+      - label: Near-miss
+        score: 2
+      - label: Minor
+        score: 3
+      - label: Major
+        score: 4
+      waste_weights:
+        safety: 1.0
+      issue_if_high: Safety incidents reported in outbound area.
+    customer:
+    - id: complaints
+      text: How often do customers raise quality complaints?
+      help: Customer complaints indicate escapes.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        defects: 1.0
+      issue_if_high: Frequent customer complaints indicate quality escapes.
+    - id: changereq
+      text: How often are last-minute order changes made?
+      help: Late changes cause expediting and overprocessing.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        waiting: 0.6
+        overprocessing: 0.6
+        overproduction: 0.4
+      issue_if_high: Frequent last-minute order changes trigger firefighting.
+    - id: forecast
+      text: How accurate is the rolling customer forecast?
+      help: Low accuracy creates volatility and WIP.
+      type: mc
+      choices:
+      - label: '>=90% accurate'
+        score: 0
+      - label: 80–89%
+        score: 1
+      - label: 70–79%
+        score: 2
+      - label: 60–69%
+        score: 3
+      - label: <60%
+        score: 4
+      waste_weights:
+        overproduction: 0.8
+        inventory: 0.6
+      issue_if_high: Low forecast accuracy causes batch surges and inventory.
+      benchmark: 'Best practice: forecast accuracy ≥ 85–90% at the planning horizon.'
+      followups:
+        trigger_score: 2
+        items:
+        - id: collab_planning
+          text: Do you run monthly collaborative planning with top customers?
+          type: mc
+          choices:
+          - 'Yes'
+          - 'No'
+      bm_ref: forecast_accuracy_pct
+    - id: leadtime
+      text: Customer lead-time expectation vs. your current lead-time?
+      help: Gap leads to expedites.
+      type: mc
+      choices:
+      - label: We are faster
+        score: 0
+      - label: Match
+        score: 1
+      - label: Slightly slower
+        score: 2
+      - label: Much slower
+        score: 3
+      - label: Far slower
+        score: 4
+      waste_weights:
+        waiting: 0.7
+        overprocessing: 0.4
+      issue_if_high: Lead-time performance below customer expectation.
+    - id: returns_cust
+      text: How often are products returned by customers?
+      help: Returns reflect defects or wrong spec.
+      type: mc
+      choices:
+      - label: Never
+        score: 0
+      - label: Rarely
+        score: 1
+      - label: Sometimes
+        score: 2
+      - label: Often
+        score: 3
+      - label: Always
+        score: 4
+      waste_weights:
+        defects: 1.0
+        overprocessing: 0.4
+      issue_if_high: Customer returns occur frequently.
+    - id: communication
+      text: Is there a structured weekly call/email to align on demand?
+      help: Regular alignment reduces noise.
+      type: mc
+      choices:
+      - label: Yes (weekly)
+        score: 0
+      - label: Biweekly
+        score: 1
+      - label: Monthly
+        score: 2
+      - label: Ad-hoc
+        score: 3
+      - label: None
+        score: 4
+      waste_weights:
+        waiting: 0.4
+        overproduction: 0.5
+      issue_if_high: No structured customer alignment; demand noise high.
+    - id: consignment
+      text: Do you use VMI/consignment for key customers?
+      help: Pull reduces FG inventory.
+      type: mc
+      choices:
+      - label: Yes, widely
+        score: 0
+      - label: Some accounts
+        score: 1
+      - label: Pilots
+        score: 2
+      - label: Planned
+        score: 3
+      - label: 'No'
+        score: 4
+      waste_weights:
+        inventory: 0.7
+        overproduction: 0.5
+      issue_if_high: No pull with customers; high FG inventory.
+    - id: penalties
+      text: Any penalties for late deliveries in the past 6 months?
+      help: Penalties show delivery risk.
+      type: mc
+      choices:
+      - label: None
+        score: 0
+      - label: Few minor
+        score: 2
+      - label: Several
+        score: 3
+      - label: Frequent/major
+        score: 4
+      waste_weights:
+        waiting: 0.7
+        cost: 0.5
+      issue_if_high: Late-delivery penalties incurred recently.
+  scoring:
+    normalize_to_5: true
+  confidence:
+    levels:
+    - label: Measured (system/logs)
+      factor: 1.0
+    - label: Observed & timed
+      factor: 0.85
+    - label: Team estimate
+      factor: 0.6
+    - label: Guess
+      factor: 0.4
+i18n:
+  en:
+    title: OE Assessment Report Generator
+    material_flow: Material Flow Narrative
+    csm: Current State Map
+    vc: End-to-End Value Chain
+    pqcdsm_obs: Observations
+    summary_top: Summary (Top Observations)
+    finance: Financial Assessment
+  ar:
+    title: مولّد تقرير التميّز التشغيلي
+    material_flow: سرد تدفق المواد
+    csm: خريطة الحالة الحالية
+    vc: سلسلة القيمة من طرف إلى طرف
+    pqcdsm_obs: الملاحظات
+    summary_top: الملخص (أهم الملاحظات)
+    finance: التقييم المالي
+brand:
+  name: Kafaa
+  primary: '#C00000'
+  secondary: '#FA0000'
+  accent: '#FF5B5B'
+  dark: '#3F3F3F'
+  muted: '#7F7F7F'
+  light: '#F2F2F2'
+  logo_path: assets/kafaa_logo.png
+  pptx_master: assets/kafaa_guideline.pptx
+  locked: true
+admin:
+  editable_blocks:
+  - value_chain.questions
+  - value_chain.confidence
 profiles:
   metal_fabrication:
-    label: "Metal Fabrication"
+    label: Metal Fabrication
     benchmarks:
       supplier_otd_pct: 95
       inventory_accuracy_pct: 98
@@ -22,7 +1456,7 @@ profiles:
       inventory_turns: 8
       inventory_days: 45
   electronics_assembly:
-    label: "Electronics Assembly"
+    label: Electronics Assembly
     benchmarks:
       supplier_otd_pct: 97
       inventory_accuracy_pct: 99
@@ -37,7 +1471,7 @@ profiles:
       inventory_turns: 12
       inventory_days: 30
   injection_molding:
-    label: "Plastics Injection Molding"
+    label: Plastics Injection Molding
     benchmarks:
       supplier_otd_pct: 95
       inventory_accuracy_pct: 98
@@ -52,7 +1486,7 @@ profiles:
       inventory_turns: 10
       inventory_days: 36
   food_beverage:
-    label: "Food & Beverage"
+    label: Food & Beverage
     benchmarks:
       supplier_otd_pct: 96
       inventory_accuracy_pct: 99
@@ -67,7 +1501,7 @@ profiles:
       inventory_turns: 20
       inventory_days: 18
   process_industrial:
-    label: "Process / Industrial"
+    label: Process / Industrial
     benchmarks:
       supplier_otd_pct: 95
       inventory_accuracy_pct: 98
@@ -81,91 +1515,12 @@ profiles:
       loading_time_min: 45
       inventory_turns: 8
       inventory_days: 45
-
-# Generic countermeasures (short list for demo)
-countermeasures:
-  defects:
-    - {id: 5why_top_defects, name: "Run 5-Why on top 3 defects", desc: "Daily defect review, define root causes and containment.", impact_pct: [10,20], effort: low, pre: "Top-N Pareto", kpi: "FPY, Scrap %"}
-    - {id: poka_yoke, name: "Add Poka‑Yoke at source", desc: "Error-proof critical steps; add sensors/fixtures.", impact_pct: [15,35], effort: medium, pre: "Design support", kpi: "DPPM"}
-  waiting:
-    - {id: smed, name: "SMED: internal→external setup", desc: "Pre‑stage tools, quick clamps, checklists.", impact_pct: [15,30], effort: low, pre: "Setup study", kpi: "Changeover time"}
-  inventory:
-    - {id: kanban, name: "Kanban & supermarkets", desc: "Right‑size buffers, FEFO/FIFO lanes.", impact_pct: [10,25], effort: medium, pre: "ABC segmentation", kpi: "Inventory days"}
-  transportation:
-    - {id: milk_run, name: "Milk‑run with fixed routes", desc: "Time‑boxed material trains to cut forklift trips.", impact_pct: [10,20], effort: medium, pre: "Route design", kpi: "Travel time"}
-  motion:
-    - {id: 5s, name: "5S & point‑of‑use storage", desc: "Organize tools/paperwork at the station.", impact_pct: [8,18], effort: low, pre: "Team buy‑in", kpi: "CT, Ergonomics"}
-  overprocessing:
-    - {id: std_work, name: "Standard work & first‑piece approval", desc: "Clarify what 'good' looks like; remove re‑checks.", impact_pct: [8,18], effort: low, pre: "SOPs", kpi: "CT, Rework"}
-  overproduction:
-    - {id: takt_release, name: "Takt‑based release & heijunka", desc: "Level mix; release to takt, not MRP push.", impact_pct: [10,25], effort: medium, pre: "Demand analysis", kpi: "WIP hours"}
-  safety:
-    - {id: ergo_fixes, name: "Ergonomic fixes & handling audit", desc: "Lift tables, POU containers, walkway separation.", impact_pct: [5,15], effort: low, pre: "HSE support", kpi: "Incidents"}
-
-# Sector-specific countermeasures
-countermeasures_profiles:
-  metal_fabrication:
-    defects:
-      - {id: weld_param_window, name: "Lock welding parameter window", desc: "Standardize WPS; verify with gauges.", impact_pct: [10,25], effort: medium, pre: "WPS draft", kpi: "FPY, Rework"}
-      - {id: fixture_poka, name: "Fixtures for hole/length poka‑yoke", desc: "Locators/stops to prevent mis‑drill/mis‑cut.", impact_pct: [15,35], effort: medium, pre: "Fixture shop", kpi: "DPPM"}
-    waiting:
-      - {id: smed_clamp, name: "Quick‑release clamps & tool carts", desc: "Convert bolts; pre‑stage carts.", impact_pct: [10,30], effort: low, pre: "Setup study", kpi: "Changeover time"}
-    transportation:
-      - {id: u_cell_weld, name: "Trial U‑cell (weld+grind)", desc: "Co‑locate, reduce forklift moves.", impact_pct: [10,20], effort: high, pre: "Layout review", kpi: "Travel time"}
-    motion:
-      - {id: gravity_racks, name: "Gravity racks for blanks", desc: "Point‑of‑use with rollers.", impact_pct: [8,18], effort: low, pre: "Rack source", kpi: "CT, Ergonomics"}
-
-prioritization:
-  name: "Kafaa PACE"
-  kpi_badge: {min_tracked: 4, label: "Kafaa Readiness Badge"}
-  critical_objectives:
-    - {id: prod, name: "Production/Throughput", weight: 1.0}
-    - {id: qual, name: "Quality", weight: 1.0}
-    - {id: cost, name: "Cost", weight: 1.0}
-    - {id: delv, name: "Delivery/OTIF", weight: 1.0}
-    - {id: safe, name: "Safety", weight: 1.0}
-    - {id: mora, name: "People & Morale", weight: 0.8}
-  objective_to_waste:
-    prod: {waiting: 0.35, overprocessing: 0.2, motion: 0.2, transportation: 0.15, inventory: 0.1}
-    qual: {defects: 0.6, overprocessing: 0.2, waiting: 0.1, motion: 0.1}
-    cost: {defects: 0.3, waiting: 0.2, inventory: 0.2, transportation: 0.15, overprocessing: 0.15}
-    delv: {inventory: 0.35, waiting: 0.25, transportation: 0.2, overproduction: 0.2}
-    safe: {safety: 0.8, motion: 0.2}
-    mora: {motion: 0.4, overprocessing: 0.2, waiting: 0.2, safety: 0.2}
-  edge_metrics:
-    defects: {key: "fpy_pct", higher_is_better: true, unit: "%"}
-    waiting: {key: "smed_changeover_min", higher_is_better: false, unit: "min"}
-    inventory: {key: "inventory_days", higher_is_better: false, unit: "days"}
-    transportation: {key: "loading_time_min", higher_is_better: false, unit: "min"}
-    overproduction: {key: "fg_aging_pct", higher_is_better: false, unit: "%"}
-
-i18n:
-  pace:
-    en:
-      title: "Kafaa PACE — Prioritization Engine"
-      present: "Present — baseline signals"
-      advantage: "Advantage — estimated annual benefit"
-      critical: "Critical — choose what matters most now"
-      edge: "Edge — combined priority (top themes)"
-      badge: "Kafaa Readiness Badge progress"
-      objectives:
-        prod: "Production/Throughput"
-        qual: "Quality"
-        cost: "Cost"
-        delv: "Delivery/OTIF"
-        safe: "Safety"
-        mora: "People & Morale"
-    ar:
-      title: "باقة كفاءة — محرك ترتيب الأولويات"
-      present: "الوضع الحالي — مؤشرات الأساس"
-      advantage: "الميزة — العائد السنوي المتوقع"
-      critical: "المهم — اختر ما يهم الآن"
-      edge: "الأفضلية — المواضيع ذات الأولوية"
-      badge: "شعار الجاهزية من كفاءة"
-      objectives:
-        prod: "الإنتاج/الطاقة"
-        qual: "الجودة"
-        cost: "التكلفة"
-        delv: "التسليم/الالتزام"
-        safe: "السلامة"
-        mora: "الأفراد والمعنويات"
+assumptions:
+  currency: SAR
+  labor_cost_per_hour: 50.0
+  overtime_premium: 1.5
+  material_cost_per_unit: 100.0
+  rework_time_min_per_unit: 10.0
+  forklift_cost_per_hour: 120.0
+  cost_of_capital_pct: 12.0
+  avg_monthly_volume_units: 10000.0
