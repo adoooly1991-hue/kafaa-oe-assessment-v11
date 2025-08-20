@@ -1,0 +1,89 @@
+thresholds:
+  defects_pct_high: 3.0
+  waiting_pct_high: 10.0
+  inventory_wip_high: 30.0
+  transport_distance_high_m: 30.0
+  motion_moves_high: 3
+  rework_pct_high: 2.0
+  safety_incidents_high: 1
+value_chain:
+  stages:
+  - id: plan
+    name: Planning & Scheduling
+  - id: inbound
+    name: Inbound Logistics
+  - id: storage
+    name: Raw Material Storage
+  - id: prep
+    name: Preparation/Setup
+  - id: manufacture
+    name: Manufacturing
+  - id: finish
+    name: Finishing/Coating
+  - id: fg
+    name: Finished Goods Storage
+  - id: outbound
+    name: Outbound Logistics
+  - id: customer
+    name: Delivery to Customer
+  common_issues:
+    inbound:
+      waiting:
+      - Long truck queue times
+      - Paperwork delays cause line-down risk
+      defects:
+      - Damaged materials on arrival
+    storage:
+      inventory:
+      - High dormant/obsolete stock
+      - Poor FIFO/FEFO discipline
+    manufacture:
+      waiting:
+      - Starved due to upstream variability
+      defects:
+      - First-pass yield below target
+    finish:
+      transportation:
+      - Excess forklift trips to coating area
+    fg:
+      inventory:
+      - Overproduction drives FG overstock
+    outbound:
+      waiting:
+      - Shipments miss daily cut-off
+i18n:
+  en:
+    title: OE Assessment Report Generator
+    nav_overview: Overview
+    nav_proc: Process Designer
+    nav_vc: Value Chain
+    nav_insights: Insights & Narratives
+    nav_export: Export
+    material_flow: Material Flow Narrative
+    csm: Current State Map
+    vc: End-to-End Value Chain
+    pqcdsm_obs: Observations
+    summary_top: Summary (Top Observations)
+  ar:
+    title: مولّد تقرير التميّز التشغيلي
+    nav_overview: نظرة عامة
+    nav_proc: تصميم العملية
+    nav_vc: سلسلة القيمة
+    nav_insights: التحليلات والسرد
+    nav_export: تصدير
+    material_flow: سرد تدفق المواد
+    csm: خريطة الحالة الحالية
+    vc: سلسلة القيمة من طرف إلى طرف
+    pqcdsm_obs: الملاحظات
+    summary_top: الملخص (أهم الملاحظات)
+brand:
+  name: Kafaa
+  primary: '#C00000'
+  secondary: '#FA0000'
+  accent: '#FF5B5B'
+  dark: '#3F3F3F'
+  muted: '#7F7F7F'
+  light: '#F2F2F2'
+  logo_path: assets/kafaa_logo.png
+  pptx_master: assets/kafaa_guideline.pptx
+  locked: true
